@@ -106,12 +106,11 @@ class Data:
         elif mode == 'pretrain':
             train_size = int(len(data) * 0.8)
             eval_size = len(data) - train_size
-            train_set, val_set = torch.utils.data.random_split(data, [train_size, eval_size])
+            train_set, val_set = torch.utils.data.random_split(data, [train_size, eval_size], torch.Generator().manual_seed(0))
             train_sampler = RandomSampler(train_set)
             train_dataloader = DataLoader(train_set, sampler=train_sampler, batch_size = self.args.pretrain_batch_size)
             eval_sampler = SequentialSampler(val_set)
             eval_dataloader = DataLoader(val_set, sampler=eval_sampler, batch_size = self.args.eval_batch_size)
-            # print(len(train_set), len(val_set))
             return train_dataloader, eval_dataloader
 
         elif mode == 'test':
@@ -195,19 +194,8 @@ class Data:
 class NeighborsDataset(Dataset):
     def __init__(self, dataset, indices, num_neighbors=None):
         super(NeighborsDataset, self).__init__()
-        # transform = dataset.transform
-        
-        # if isinstance(transform, dict):
-        #     self.anchor_transform = transform['standard']
-        #     self.neighbor_transform = transform['augment']
-        # else:
-        #     self.anchor_transform = transform
-        #     self.neighbor_transform = transform
-       
-        # dataset.transform = None
-        # self.tok= AutoTokenizer.from_pretrained(tokenizer)
         self.dataset = dataset
-        self.indices = indices # Nearest neighbor indices (np.array  [len(dataset) x k])
+        self.indices = indices
         if num_neighbors is not None:
             self.indices = self.indices[:, :num_neighbors+1]
         assert(self.indices.shape[0] == len(self.dataset))
@@ -222,24 +210,16 @@ class NeighborsDataset(Dataset):
         for item in self.indices[index]:
             if item != -1:
                 a.append(item)
+        # If there are no neighbors left after filtering, choose a random neighbor.
         try:
             neighbor_index = np.random.choice(a, 1)[0]
         except:
             neighbor_index = np.random.choice(self.indices[index], 1)[0]
-        # neighbor_index = np.random.choice(self.indices[index], 1)[0]
         neighbor = self.dataset.__getitem__(neighbor_index)
 
-        # anchor['image'] = self.anchor_transform(anchor['image'])
-        # neighbor['image'] = self.neighbor_transform(neighbor['image'])
-
-        # output['anchor'] = anchor['image']
-        # output['neighbor'] = neighbor['image'] 
-        # anchor[0] = shuffle_tokens(anchor[0], self.tok)
-        # neighbor[0] = shuffle_tokens(neighbor[0], self.tok)
         output['anchor'] = anchor[:3]
         output['neighbor'] = neighbor[:3]
         output['possible_neighbors'] = torch.from_numpy(self.indices[index])
-        # output['target'] = anchor['target']
         output['target'] = anchor[-1]
         output['coarse_label'] = anchor[-2]
         output['index'] = index

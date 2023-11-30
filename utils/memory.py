@@ -5,8 +5,8 @@ class MemoryBank(object):
     
     def __init__(self, n, dim, m):
         self.n = n
-        self.m = m
         self.dim = dim 
+        self.m = m
         self.features = torch.FloatTensor(self.n, self.dim)
         self.targets = torch.LongTensor(self.n)
         self.coarse_labels = torch.LongTensor(self.n)

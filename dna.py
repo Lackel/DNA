@@ -26,7 +26,7 @@ class ModelManager:
         self.model_m = DNAModel(args, data.n_fine, data.n_coarse)
         if pretrained_model is None:
             pretrained_model = PretrainModelManager(args, data)
-            if os.path.exists(args.save_model_path):
+            if os.path.exists(args.save_premodel_path):
                 pretrained_model = self.restore_model(args, pretrained_model.model)
             pretrained_dict = pretrained_model.backbone.state_dict()
             self.model.backbone.load_state_dict(pretrained_dict, strict=False)
@@ -93,7 +93,7 @@ class ModelManager:
         """get indices of neighbors"""
         self.memory_bank = MemoryBank(len(data.train_dataset), args.feat_dim, args.m)
         fill_memory_bank(data.train_dataloader, self.model, self.memory_bank)
-        print("Mine Neighbors with Constraints")
+        print("Mining Neighbors")
         indices = self.memory_bank.mine_nearest_neighbors(args.topk, calculate_accuracy=False, rank=rank)
         return indices  
 
@@ -175,8 +175,9 @@ class ModelManager:
             print('Epoch ' + str(epoch) + ' loss:' + str(loss))
             
             # Update neighborhood relationships
-            indices = self.get_neighbor_inds(args, data)
-            self.get_neighbor_dataset(args, data, indices) 
+            if epoch != args.num_train_epochs - 1:
+                indices = self.get_neighbor_inds(args, data)
+                self.get_neighbor_dataset(args, data, indices) 
         
     def test(self):
         """
@@ -185,9 +186,9 @@ class ModelManager:
         self.model.eval()
 
         feats, labels = self.get_features_labels(self.data.test_dataloader, self.model, self.args)
-        feats = F.normalize(feats, dim=1)
+        # feats = F.normalize(feats, dim=1)
         feats = feats.cpu().numpy()
-        km = KMeans(n_clusters = self.data.n_fine, n_init=20).fit(feats)
+        km = KMeans(n_clusters = self.data.n_fine, n_init=20, random_state=self.args.seed).fit(feats)
 
         y_pred = km.labels_
         y_true = labels.cpu().numpy()
@@ -196,7 +197,7 @@ class ModelManager:
         return results_all
 
     def restore_model(self, args, model):
-        output_model_file = os.path.join(args.save_model_path, WEIGHTS_NAME)
+        output_model_file = os.path.join(args.save_premodel_path, WEIGHTS_NAME)
         model.backbone.load_state_dict(torch.load(output_model_file))
         return model
 
@@ -213,9 +214,9 @@ if __name__ == '__main__':
     # Pre-training with coarse-grained labels
     pretrain = PretrainModelManager(args, data)
     pretrain.train()
-    manager = ModelManager(args, data)
     
     # Training
+    manager = ModelManager(args, data)
     print('Training begin...')
     manager.train(args, data)
     if args.save_model:
